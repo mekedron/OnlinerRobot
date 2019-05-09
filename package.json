@@ -1,0 +1,32 @@
+{
+  "name": "onliner-robot",
+  "version": "1.0.0",
+  "description": "Onliner Robot",
+  "main": "index.js",
+  "dependencies": {
+    "lodash-id": "^0.14.0",
+    "lowdb": "^1.0.0",
+    "telegraf": "^3.29.0",
+    "telegraf-session-local": "0.0.6"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/durexlovesex/OnlinerRobot.git"
+  },
+  "keywords": [
+    "nodejs",
+    "onliner",
+    "telegram",
+    "bot"
+  ],
+  "author": "Nikita Rabykin",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/durexlovesex/OnlinerRobot/issues"
+  },
+  "homepage": "https://github.com/durexlovesex/OnlinerRobot#readme"
+}

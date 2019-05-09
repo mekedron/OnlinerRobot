@@ -59,3 +59,10 @@ typings/
 
 # next.js build output
 .next
+
+# Intellij Idea
+.idea
+
+# Sessions file (the name is stored in the .env file)
+sessions.json
+apartments.json
