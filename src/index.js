@@ -5,8 +5,7 @@ const bot = new Telegraf(process.env.BOT_TOKEN)
 const localSession = new LocalSession({
   database: process.env.SESSIONS_DB,
   state: {
-    sessions: [],
-    apartments: [],
+    sessions: []
   },
 })
 

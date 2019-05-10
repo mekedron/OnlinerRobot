@@ -3,6 +3,7 @@ const https = require('https')
 const low = require('lowdb')
 const FileSync = require('lowdb/adapters/FileSync')
 const lodashId = require('lodash-id')
+const cron = require('node-cron');
 
 const bot = new Telegraf(process.env.BOT_TOKEN)
 
@@ -28,7 +29,7 @@ let callAPI = function (url, options) {
     (res) => {
       if (res.statusCode !== 200) {
         return reject(new Error(
-          'Status code is not 200, response is: ' + JSON.stringify(res),
+          'Status code is not 200, response is: ' + JSON.stringify(res.rawHeaders),
         ))
       }
 
@@ -49,7 +50,7 @@ let sendApartment = function (chatId, apartment) {
 
   let message = ''
 
-  message += `💵 $${apartment.price.amount}\n`
+  message += `💵 $${apartment.price.converted.USD.amount}\n`
   message += `📍 ${apartment.location.address}\n`
   message += `🌟 ${createdAt}\n`
 
@@ -122,6 +123,10 @@ let processUser = async function (user) {
 let fetchApartments = async function (url) {
   let params = url.slice(url.indexOf('?')).replace('#', '&')
 
+  if (!params) {
+    return []
+  }
+
   try {
     // @todo support pagination
     let result = await callAPI(
@@ -138,4 +143,4 @@ let fetchApartments = async function (url) {
   }
 }
 
-start()
+cron.schedule(process.env.SCHEDULE, start);

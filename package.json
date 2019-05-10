@@ -2,16 +2,19 @@
   "name": "onliner-robot",
   "version": "1.0.0",
   "description": "Onliner Robot",
-  "main": "index.js",
+  "main": "src/index.js",
   "dependencies": {
     "lodash-id": "^0.14.0",
     "lowdb": "^1.0.0",
+    "node-cron": "^2.0.3",
     "telegraf": "^3.29.0",
     "telegraf-session-local": "0.0.6"
   },
   "devDependencies": {},
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node src/index.js",
+    "sender": "node src/sender.js"
   },
   "repository": {
     "type": "git",
