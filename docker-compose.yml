@@ -34,7 +34,10 @@ services:
     image: mongo:latest
     restart: always
     env_file: .env
+    ports:
+      - "27017:27017"
     volumes:
+      - ./mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js
       - data-volume:/data/db
 
 volumes:

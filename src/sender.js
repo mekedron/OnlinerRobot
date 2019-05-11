@@ -1,146 +1,187 @@
 const Telegraf = require('telegraf')
 const https = require('https')
-const low = require('lowdb')
-const FileSync = require('lowdb/adapters/FileSync')
-const lodashId = require('lodash-id')
-const cron = require('node-cron');
+const { MongoClient } = require('mongodb')
 
-const bot = new Telegraf(process.env.BOT_TOKEN)
+class Sender {
+  constructor (
+    botToken,
+    mongoUri = 'mongodb://localhost:27017',
+    sessionsCollectionName = 'session',
+    apartmentsCollectionName = 'apartment',
+    schedule = null,
+    mongoOptions = {
+      useNewUrlParser: true
+    }
+  ) {
+    this.botToken = botToken
+    this.mongoUri = mongoUri
+    this.sessionsCollectionName = sessionsCollectionName
+    this.apartmentsCollectionName = apartmentsCollectionName
+    this.schedule = schedule
+    this.mongoOptions = mongoOptions
 
-const sessionAdapter = new FileSync(process.env.SESSIONS_DB)
-const apartmentsAdapter = new FileSync(process.env.APARTMENTS_DB)
+    this.inited = false;
+  }
 
-const sessionDB = low(sessionAdapter)
-const apartmentsDB = low(apartmentsAdapter)
+  async init () {
+    if (this.inited) {
+      return;
+    }
 
-apartmentsDB.defaults({ apartments: [] }).write()
-apartmentsDB._.mixin(lodashId)
+    this.client = await MongoClient.connect(this.mongoUri, this.mongoOptions)
+    this.db = this.client.db()
+    this.sessions = this.db.collection(this.sessionsCollectionName)
+    this.apartments = this.db.collection(this.apartmentsCollectionName)
 
-let callAPI = function (url, options) {
-  let requestOptions = Object.assign({
-    headers: {
-      'Accept': 'application/json, text/plain, */*',
-    },
-  }, options)
+    await this.apartments.createIndex({'onliner_id': 1})
 
-  return new Promise((resolve, reject) => https.get(
-    url,
-    requestOptions,
-    (res) => {
-      if (res.statusCode !== 200) {
-        return reject(new Error(
-          'Status code is not 200, response is: ' + JSON.stringify(res.rawHeaders),
-        ))
+    this.bot = new Telegraf(this.botToken)
+
+    if (this.schedule) {
+      const cron = require('node-cron');
+      cron.schedule(this.schedule, this.exec.bind(this))
+    }
+
+    this.inited = true;
+
+    return this.exec()
+  }
+
+  async exec () {
+    let users = await this.sessions.find().toArray()
+
+    // @todo batch
+    for (var i = 0; i < users.length; i++) {
+      await this.processUser(users[i])
+    }
+  }
+
+  async processUser (user) {
+    if (!user.data || !user.data.url) {
+      return
+    }
+
+    let chatId = user.key.split(':')[0]
+    let apartments = await this.fetchApartments(user.data.url)
+
+    if (!apartments.length) {
+      return
+    }
+
+    for (var i = 0; i < apartments.length; i++) {
+      let apartment = apartments[i]
+      apartment.onliner_id = apartment.id;
+      delete apartment.id;
+
+      let existingApartment = await this.apartments.findOne({
+        onliner_id: apartment.onliner_id
+      })
+
+      apartment.has_sent_to = existingApartment
+        ? existingApartment.has_sent_to
+        : {}
+
+      if (apartment.has_sent_to[chatId]) {
+        continue
+      } else {
+        apartment.has_sent_to[chatId] = 1
       }
 
-      let data = ''
-      res.on('data', chunk => data += chunk)
-      res.on('end', () => resolve(JSON.parse(data)))
-    }).on('error', err => reject(new Error(err))),
-  )
-}
-
-let getUsers = async function () {
-  return sessionDB.read().get('sessions').value()
-}
-
-let sendApartment = function (chatId, apartment) {
-  let createdAt = new Date(apartment.created_at).toLocaleString('en-US')
-  let updatedAt = new Date(apartment.last_time_up).toLocaleString('en-US')
-
-  let message = ''
-
-  message += `💵 $${apartment.price.converted.USD.amount}\n`
-  message += `📍 ${apartment.location.address}\n`
-  message += `🌟 ${createdAt}\n`
-
-  if (updatedAt !== createdAt) {
-    message += `♻️ ${updatedAt}\n`
+      try {
+        await this.sendApartment(chatId, apartment)
+        await this.apartments.findOneAndUpdate({
+          onliner_id: apartment.onliner_id
+        }, { $set: apartment }, { upsert: true })
+      } catch (e) {
+        console.error(
+          'Can\'t send the apartment to the user = ' +
+          user.id + ', apartment = ' +
+          JSON.stringify(apartment),
+          e,
+        )
+      }
+    }
   }
 
-  return bot.telegram.sendPhoto(chatId, apartment.photo, {
-    caption: message,
-    reply_markup: JSON.stringify({
-      inline_keyboard: [
-        [{ text: 'View', url: apartment.url }],
-      ],
-    }),
-  })
-}
+  async sendApartment (chatId, apartment) {
+    let createdAt = new Date(apartment.created_at).toLocaleString('en-US')
+    let updatedAt = new Date(apartment.last_time_up).toLocaleString('en-US')
 
-let start = async function () {
-  let users = await getUsers()
+    let message = ''
 
-  // @todo batch
-  for (var i = 0; i < users.length; i++) {
-    await processUser(users[i])
-  }
-}
+    message += `💵 $${apartment.price.converted.USD.amount}\n`
+    message += `📍 ${apartment.location.address}\n`
+    message += `🌟 ${createdAt}\n`
 
-let processUser = async function (user) {
-  if (!user.data || !user.data.url) {
-    return
-  }
+    if (updatedAt !== createdAt) {
+      message += `♻️ ${updatedAt}\n`
+    }
 
-  let chatId = user.id.split(':')[0]
-  let apartments = await fetchApartments(user.data.url)
-
-  apartmentsDB.read()
-  let collection = apartmentsDB.get('apartments')
-
-  if (!apartments.length) {
-    return
+    return this.bot.telegram.sendPhoto(chatId, apartment.photo, {
+      caption: message,
+      reply_markup: JSON.stringify({
+        inline_keyboard: [
+          [{ text: 'View', url: apartment.url }],
+        ],
+      }),
+    })
   }
 
-  for (var i = 0; i < apartments.length; i++) {
-    let apartment = apartments[i]
-    let existingApartment = await collection.getById(apartment.id).value()
+  async fetchApartments (url) {
+    let params = url.slice(url.indexOf('?')).replace('#', '&')
 
-    apartment.has_sent_to = existingApartment
-      ? existingApartment.has_sent_to
-      : {}
-
-    if (apartment.has_sent_to[chatId]) {
-      continue
-    } else {
-      apartment.has_sent_to[chatId] = 1
+    if (!params) {
+      return []
     }
 
     try {
-      await sendApartment(chatId, apartment)
-      await collection.upsert(apartment).write()
+      // @todo support pagination
+      let result = await this.callAPI(
+        'https://ak.api.onliner.by/search/apartments' + params, {
+          referer: url,
+        })
+
+      return result.apartments || []
+
     } catch (e) {
-      console.error(
-        'Can\'t send the apartment to the user = ' +
-        user.id + ', apartment = ' +
-        JSON.stringify(apartment),
-        e,
-      )
+      console.error('Can\'t get the apartments by the url = ' + url, e)
+
+      return []
     }
   }
+
+  async callAPI (url, options) {
+    let requestOptions = Object.assign({
+      headers: {
+        'Accept': 'application/json, text/plain, */*',
+      },
+    }, options)
+
+    return new Promise((resolve, reject) => https.get(
+      url,
+      requestOptions,
+      (res) => {
+        if (res.statusCode !== 200) {
+          return reject(new Error(
+            'Status code is not 200, response is: ' +
+            JSON.stringify(res.rawHeaders),
+          ))
+        }
+
+        let data = ''
+        res.on('data', chunk => data += chunk)
+        res.on('end', () => resolve(JSON.parse(data)))
+      }).on('error', err => reject(new Error(err))),
+    )
+  }
 }
 
-let fetchApartments = async function (url) {
-  let params = url.slice(url.indexOf('?')).replace('#', '&')
+const sender = new Sender(
+  process.env.BOT_TOKEN,
+  process.env.MONGO_URI,
+  process.env.SESSIONS_COLLECTION,
+  process.env.APARTMENTS_COLLECTION,
+  process.env.SCHEDULE
+);
 
-  if (!params) {
-    return []
-  }
-
-  try {
-    // @todo support pagination
-    let result = await callAPI(
-      'https://ak.api.onliner.by/search/apartments' + params, {
-        referer: url,
-      })
-
-    return result.apartments || []
-
-  } catch (e) {
-    console.error('Can\'t get the apartments by the url = ' + url, e)
-
-    return []
-  }
-}
-
-cron.schedule(process.env.SCHEDULE, start);
+sender.init().catch(console.error);

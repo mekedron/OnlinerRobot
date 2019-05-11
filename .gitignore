@@ -63,5 +63,5 @@ typings/
 # Intellij Idea
 .idea
 
-# Logs
-logs
+# MongoDB credentials
+mongo-init.js

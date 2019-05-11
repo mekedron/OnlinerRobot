@@ -1,15 +1,11 @@
 const Telegraf = require('telegraf')
-const LocalSession = require('telegraf-session-local')
+const { TelegrafMongoSession } = require('telegraf-session-mongodb');
 
 const bot = new Telegraf(process.env.BOT_TOKEN)
-const localSession = new LocalSession({
-  database: process.env.SESSIONS_DB,
-  state: {
-    sessions: []
-  },
-})
 
-bot.use(localSession.middleware())
+TelegrafMongoSession.setup(bot, process.env.MONGO_URI, {
+  collectionName: process.env.SESSIONS_COLLECTION,
+});
 
 bot.start((ctx) => {
   return ctx.reply(
@@ -25,15 +21,12 @@ bot.command('stop', (ctx) => {
   ctx.session.url = null
 
   return ctx.reply(
-    'Sorry if you were insulted by this bot, I\'ve just tried to make the world better.')
+    'Sorry if you were insulted by this bot, I\'ve just tried to make this world a bit better.')
 })
-// bot.command('refresh', ctx => {
-//   return ctx.reply('Apartments cache has been cleared successfully! ⭐️')
-// })
 bot.hears(/https:\/\/r.onliner.by\/ak\//ig, (ctx) => {
   ctx.session.url = ctx.message.text
 
   return ctx.reply('Thanks, the link has been updated.')
 })
 
-bot.launch()
+bot.startPolling()
