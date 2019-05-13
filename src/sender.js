@@ -10,8 +10,8 @@ class Sender {
     apartmentsCollectionName = 'apartment',
     schedule = null,
     mongoOptions = {
-      useNewUrlParser: true
-    }
+      useNewUrlParser: true,
+    },
   ) {
     this.botToken = botToken
     this.mongoUri = mongoUri
@@ -20,12 +20,12 @@ class Sender {
     this.schedule = schedule
     this.mongoOptions = mongoOptions
 
-    this.inited = false;
+    this.inited = false
   }
 
-  async init () {
+  async launch () {
     if (this.inited) {
-      return;
+      return
     }
 
     this.client = await MongoClient.connect(this.mongoUri, this.mongoOptions)
@@ -33,16 +33,16 @@ class Sender {
     this.sessions = this.db.collection(this.sessionsCollectionName)
     this.apartments = this.db.collection(this.apartmentsCollectionName)
 
-    await this.apartments.createIndex({'onliner_id': 1})
+    await this.apartments.createIndex({ onliner_id: 1 })
 
     this.bot = new Telegraf(this.botToken)
 
     if (this.schedule) {
-      const cron = require('node-cron');
+      const cron = require('node-cron')
       cron.schedule(this.schedule, this.exec.bind(this))
     }
 
-    this.inited = true;
+    this.inited = true
 
     return this.exec()
   }
@@ -70,11 +70,11 @@ class Sender {
 
     for (var i = 0; i < apartments.length; i++) {
       let apartment = apartments[i]
-      apartment.onliner_id = apartment.id;
-      delete apartment.id;
+      apartment.onliner_id = apartment.id
+      delete apartment.id
 
       let existingApartment = await this.apartments.findOne({
-        onliner_id: apartment.onliner_id
+        onliner_id: apartment.onliner_id,
       })
 
       apartment.has_sent_to = existingApartment
@@ -90,7 +90,7 @@ class Sender {
       try {
         await this.sendApartment(chatId, apartment)
         await this.apartments.findOneAndUpdate({
-          onliner_id: apartment.onliner_id
+          onliner_id: apartment.onliner_id,
         }, { $set: apartment }, { upsert: true })
       } catch (e) {
         console.error(
@@ -181,7 +181,9 @@ const sender = new Sender(
   process.env.MONGO_URI,
   process.env.SESSIONS_COLLECTION,
   process.env.APARTMENTS_COLLECTION,
-  process.env.SCHEDULE
-);
+  process.env.SCHEDULE,
+)
 
-sender.init().catch(console.error);
+sender.launch().catch(
+  console.error,
+)
