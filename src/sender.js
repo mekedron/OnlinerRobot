@@ -110,6 +110,7 @@ class Sender {
     let message = ''
 
     message += `💵 $${apartment.price.converted.USD.amount}\n`
+    message += `🚪 ${Sender.formatRentType(apartment.rent_type)}\n`
     message += `📍 ${apartment.location.address}\n`
     message += `🌟 ${createdAt}\n`
 
@@ -125,6 +126,10 @@ class Sender {
         ],
       }),
     })
+  }
+
+  static formatRentType (rentType) {
+    return rentType === 'room' ? 'Комната' : "Комнаты: " + rentType.split("_")[0];
   }
 
   async fetchApartments (url) {
