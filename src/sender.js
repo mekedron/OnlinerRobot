@@ -48,7 +48,8 @@ class Sender {
   }
 
   async exec () {
-    let users = await this.sessions.find().toArray()
+    let users = await this.sessions.find({ 'data.url': { $ne: null } }).
+      toArray()
 
     // @todo batch
     for (var i = 0; i < users.length; i++) {
@@ -87,19 +88,21 @@ class Sender {
         apartment.has_sent_to[chatId] = 1
       }
 
-      try {
-        await this.sendApartment(chatId, apartment)
-        await this.apartments.findOneAndUpdate({
-          onliner_id: apartment.onliner_id,
-        }, { $set: apartment }, { upsert: true })
-      } catch (e) {
-        console.error(
-          'Can\'t send the apartment to the user = ' +
-          user.id + ', apartment = ' +
-          JSON.stringify(apartment),
-          e,
-        )
-      }
+      this.sendApartment(chatId, apartment).catch(e => {
+        if (parseInt(e.code, 10) === 403) {
+          this.unsubscribe(user._id)
+        } else {
+          console.error(
+            'Can\'t send the apartment to the user: \'' +
+            user.key + '\', apartment: \'' +
+            JSON.stringify(apartment) + '\'\n' +
+            '    Reason: ' + e.message,
+          )
+        }
+      })
+      await this.apartments.findOneAndUpdate({
+        onliner_id: apartment.onliner_id,
+      }, { $set: apartment }, { upsert: true })
     }
   }
 
@@ -129,7 +132,8 @@ class Sender {
   }
 
   static formatRentType (rentType) {
-    return rentType === 'room' ? 'Комната' : "Комнаты: " + rentType.split("_")[0];
+    return rentType === 'room' ? 'Комната' : 'Комнаты: ' +
+      rentType.split('_')[0]
   }
 
   async fetchApartments (url) {
@@ -177,6 +181,13 @@ class Sender {
         res.on('data', chunk => data += chunk)
         res.on('end', () => resolve(JSON.parse(data)))
       }).on('error', err => reject(new Error(err))),
+    )
+  }
+
+  async unsubscribe (userId) {
+    return this.sessions.findOneAndUpdate(
+      { _id: userId },
+      { $set: { data: { url: null } } },
     )
   }
 }
