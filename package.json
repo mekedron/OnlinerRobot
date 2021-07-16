@@ -1,15 +1,15 @@
 {
   "name": "onliner-robot",
   "version": "1.0.0",
+  "private": true,
   "description": "Onliner Robot",
   "main": "src/index.js",
   "dependencies": {
     "mongodb": "^3.2.4",
     "node-cron": "^2.0.3",
-    "telegraf": "^3.29.0",
+    "telegraf": "^3.39.0",
     "telegraf-session-mongodb": "^1.1.1"
   },
-  "devDependencies": {},
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node src/index.js",
